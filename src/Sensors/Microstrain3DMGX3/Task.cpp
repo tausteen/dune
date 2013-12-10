@@ -194,16 +194,21 @@ namespace Sensors
         m_rotation.fill(3, 3, &m_args.rotation_mx[0]);
 
         // Rotate calibration parameters.
-        Math::Matrix data;
-        data.resize(3, 1);
+        Math::Matrix data(3, 1);
 
         for (unsigned i = 0; i < 3; i++)
           data(i) = m_args.hard_iron[i];
 
-        data = m_rotation * data;
+        data = inverse(m_rotation) * data;
 
         for (unsigned i = 0; i < 3; i++)
           m_hard_iron[i] = data(i);
+
+        if (m_uart == NULL)
+          return;
+
+        if (paramChanged(m_args.hard_iron))
+          runCalibration();
       }
 
       //! Release resources.
@@ -275,27 +280,21 @@ namespace Sensors
             (std::abs(msg->y) < m_args.calib_threshold))
           return;
 
-        m_args.hard_iron[0] += msg->x;
-        m_args.hard_iron[1] += msg->y;
-        m_args.hard_iron[2] = 0.0;
+        double hi_x = m_args.hard_iron[0] + msg->x;
+        double hi_y = m_args.hard_iron[1] + msg->y;
 
-        // Rotate calibration parameters.
-        Math::Matrix data;
-        data.resize(3, 1);
+        IMC::EntityParameter hip;
+        hip.name = c_hard_iron_param;
+        hip.value = String::str("%f, %f, %f", hi_x, hi_y, 0);
 
-        for (unsigned i = 0; i < 3; i++)
-          data(i) = m_args.hard_iron[i];
+        IMC::SetEntityParameters np;
+        np.name = getEntityLabel();
+        np.params.push_back(hip);
+        dispatch(np, DF_LOOP_BACK);
 
-        data = m_rotation * data;
-
-        for (unsigned i = 0; i < 3; i++)
-          m_hard_iron[i] = data(i);
-
-        IMC::SaveEntityParameters params;
-        params.name = getName();
-        dispatch(params);
-
-        runCalibration();
+        IMC::SaveEntityParameters sp;
+        sp.name = getEntityLabel();
+        dispatch(sp);
       }
 
       //! Send commands to the device.
@@ -307,6 +306,9 @@ namespace Sensors
       inline bool
       poll(Commands cmd, Sizes cmd_size, uint16_t addr, uint16_t value)
       {
+        if (m_uart == NULL)
+          return false;
+
         // Request data.
         switch (cmd)
         {
@@ -394,6 +396,9 @@ namespace Sensors
       void
       runCalibration(void)
       {
+        if (m_uart == NULL)
+          return;
+
         // See if vehicle has same hard iron calibration parameters.
         if (!isCalibrated())
         {
@@ -533,17 +538,7 @@ namespace Sensors
       void
       rotateData(void)
       {
-        Math::Matrix data;
-        data.resize(3, 1);
-
-        // Euler Angles.
-        data(0) = m_euler.phi;
-        data(1) = m_euler.theta;
-        data(2) = m_euler.psi;
-        data = m_rotation * data;
-        m_euler.phi = data(0);
-        m_euler.theta = data(1);
-        m_euler.psi = data(2);
+        Math::Matrix data(3, 1);
 
         // Acceleration.
         data(0) = m_accel.x;
@@ -616,15 +611,22 @@ namespace Sensors
           m_magfield.z = mfield[2];
 
           // Extract orientation matrix and compute Euler angles.
-          fp32_t omtrx[5] = {0};
-          ByteCopy::fromBE(omtrx[0], m_bfr + 37); // M11
-          ByteCopy::fromBE(omtrx[1], m_bfr + 41); // M12
-          ByteCopy::fromBE(omtrx[2], m_bfr + 45); // M13
-          ByteCopy::fromBE(omtrx[3], m_bfr + 57); // M23
-          ByteCopy::fromBE(omtrx[4], m_bfr + 69); // M33
-          m_euler.phi = static_cast<double>(std::atan2(omtrx[3], omtrx[4]));
-          m_euler.theta = static_cast<double>(std::asin(-omtrx[2]));
-          m_euler.psi = static_cast<double>(std::atan2(omtrx[1], omtrx[0]));
+          Math::Matrix rmat(3, 3);
+          float r[9] = {0};
+          double r8[9] = {0};
+
+          for (unsigned i = 0; i < 9; ++i)
+          {
+            ByteCopy::fromBE(r[i], m_bfr + 37 + 4 * i);
+            r8[i] = r[i];
+          }
+
+          rmat.fill(3, 3, &r8[0]);
+          rmat = transpose(m_rotation * rmat);
+
+          m_euler.phi = std::atan2(rmat(2, 1), rmat(2, 2));
+          m_euler.theta = std::asin(-rmat(2, 0));
+          m_euler.psi = std::atan2(rmat(1, 0), rmat(0, 0));
           m_euler.psi_magnetic = m_euler.psi;
 
           // Extract time.
