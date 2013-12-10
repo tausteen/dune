@@ -1,3 +1,26 @@
+DUNE v2.3.3
+===========
+
+* Sensors.Microstrain3DMGX3: corrected a bug that prevented new hard-iron calibration
+  parameters to be correctly stored in the vehicle configuration file.
+
+* Supervisors.Vehicle: enter error mode when abort is requested.
+
+* Navigation.AUV.SGNavigation: EstimatedState psi is properly filled.
+
+DUNE v2.3.2
+===========
+
+* Edgetech 2205: modified IP address to 10.0.10.84.
+
+DUNE v2.3.1
+===========
+
+* Monitors.Emergency: save and use latest GPS information.
+
+* Sensors.GPS: restart task if communications watch dog overflows.
+
+
 DUNE v2.3.0
 ===========
 
