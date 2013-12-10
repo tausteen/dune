@@ -47,6 +47,10 @@ namespace Sensors
 
     //! Hard Iron calibration parameter name.
     static const std::string c_hard_iron_param = "Hard-Iron Calibration";
+    //! Time to wait for soft-reset.
+    static const float c_reset_tout = 5.0;
+    //! Number of axis.
+    static const uint8_t c_number_axis = 3;
 
     //! Commands to device.
     enum Commands
@@ -92,14 +96,9 @@ namespace Sensors
       double calib_threshold;
       //! Hard iron calibration.
       std::vector<float> hard_iron;
-      //! Incoming Calibration Parameters entity label.
-      std::string calib_elabel;
       // Rotation matrix values.
       std::vector<double> rotation_mx;
     };
-
-    //! Time to wait for soft-reset.
-    static const float c_reset_tout = 5.0;
 
     //! %Microstrain3DMGX3 software driver.
     struct Task: public DUNE::Tasks::Periodic
@@ -130,8 +129,6 @@ namespace Sensors
       uint8_t m_bfr[c_bfr_size];
       //! Magnetic Calibration addresses.
       uint16_t m_addr[c_num_addr];
-      //! Compass Calibration maneuver entity id.
-      unsigned m_calib_eid;
       //! Read timestamp.
       double m_tstamp;
       //! Watchdog.
@@ -154,6 +151,7 @@ namespace Sensors
 
         param("Data Timeout", m_args.data_tout)
         .defaultValue("2.0")
+        .minimumValue("1.0")
         .units(Units::Second)
         .description("Number of seconds without data before reporting an error");
 
@@ -165,12 +163,8 @@ namespace Sensors
 
         param(c_hard_iron_param, m_args.hard_iron)
         .units(Units::Gauss)
-        .size(3)
+        .size(c_number_axis)
         .description("Hard-Iron calibration parameters");
-
-        param("Calibration Maneuver - Entity Label", m_args.calib_elabel)
-        .defaultValue("")
-        .description("Entity label of maneuver responsible for compass calibration");
 
         param("IMU Rotation Matrix", m_args.rotation_mx)
         .defaultValue("")
@@ -179,12 +173,11 @@ namespace Sensors
 
         m_timer.setTop(c_reset_tout);
 
-        bind<IMC::MagneticField>(this);
-      }
+        // Magnetic calibration addresses.
+        for (unsigned i = 0; i <= c_num_addr - 1; i++)
+          m_addr[i] = c_mag_addr + (uint16_t)(i * 2);
 
-      ~Task(void)
-      {
-        Task::onResourceRelease();
+        bind<IMC::MagneticField>(this);
       }
 
       //! Update parameters.
@@ -218,20 +211,6 @@ namespace Sensors
         Memory::clear(m_uart);
       }
 
-      //! Resolve entities.
-      void
-      onEntityResolution(void)
-      {
-        try
-        {
-          m_calib_eid = resolveEntity(m_args.calib_elabel);
-        }
-        catch (...)
-        {
-          m_calib_eid = 0;
-        }
-      }
-
       //! Acquire resources.
       void
       onResourceAcquisition(void)
@@ -245,10 +224,6 @@ namespace Sensors
       void
       onResourceInitialization(void)
       {
-        // initialize magnetic calibration addresses.
-        for (unsigned i = 0; i <= c_num_addr - 1; i++)
-          m_addr[i] = c_mag_addr + (uint16_t)(i * 2);
-
         while (!stopping())
         {
           // Read firmware version in order to assess if we can communicate
@@ -260,7 +235,7 @@ namespace Sensors
           setEntityState(IMC::EntityState::ESTA_ERROR, Status::CODE_COM_ERROR);
         }
 
-        // Run calibration using configuration parameters.
+        // Calibrate sensor.
         runCalibration();
 
         // Prepare to read data frame.
@@ -272,7 +247,7 @@ namespace Sensors
       void
       consume(const IMC::MagneticField* msg)
       {
-        if (m_calib_eid != msg->getSourceEntity())
+        if (msg->getDestinationEntity() != getEntityId())
           return;
 
         // Reject if it is small adjustment.
@@ -438,9 +413,9 @@ namespace Sensors
         }
 
         // Sensor magnetic calibration.
-        uint32_t senCal[3] = {0};
+        uint32_t senCal[c_number_axis] = {0};
         // Magnetic calibration in configuration.
-        uint32_t cfgCal[3] = {0};
+        uint32_t cfgCal[c_number_axis] = {0};
 
         for (unsigned i = 0; i <= 2; i++)
         {
@@ -461,7 +436,7 @@ namespace Sensors
       void
       resetDevice(void)
       {
-        uint8_t bfr[3];
+        uint8_t bfr[c_number_axis];
 
         // Fill buffer.
         bfr[0] = CMD_DEVICE_RESET;
@@ -469,7 +444,7 @@ namespace Sensors
         bfr[2] = 0x3A;
 
         // Reset device.
-        m_uart->write((uint8_t*)&bfr, 3);
+        m_uart->write((uint8_t*)&bfr, c_number_axis);
       }
 
       //! Request calibration parameters from device.
@@ -497,7 +472,7 @@ namespace Sensors
         inf(DTR("new hard-iron calibration parameters: %f | %f"), m_args.hard_iron[0], m_args.hard_iron[1]);
         m_uart->setMinimumRead(CMD_WRITE_EEPROM_SIZE);
 
-        for (unsigned i = 0; i <= c_num_addr / 3; i++)
+        for (unsigned i = 0; i <= c_num_addr / c_number_axis; i++)
         {
           uint32_t val;
           std::memcpy(&val, &m_hard_iron[i], sizeof(uint32_t));
@@ -584,7 +559,7 @@ namespace Sensors
           m_magfield.setTimeStamp(m_tstamp);
 
           // Extract acceleration.
-          fp32_t accel[3] = {0};
+          fp32_t accel[c_number_axis] = {0};
           ByteCopy::fromBE(accel[0], m_bfr + 1);
           ByteCopy::fromBE(accel[1], m_bfr + 5);
           ByteCopy::fromBE(accel[2], m_bfr + 9);
@@ -593,7 +568,7 @@ namespace Sensors
           m_accel.z = Math::c_gravity * accel[2];
 
           // Extract angular rates.
-          fp32_t arate[3] = {0};
+          fp32_t arate[c_number_axis] = {0};
           ByteCopy::fromBE(arate[0], m_bfr + 13);
           ByteCopy::fromBE(arate[1], m_bfr + 17);
           ByteCopy::fromBE(arate[2], m_bfr + 21);
@@ -602,7 +577,7 @@ namespace Sensors
           m_agvel.z = arate[2];
 
           // Extract magnetic field.
-          fp32_t mfield[3] = {0};
+          fp32_t mfield[c_number_axis] = {0};
           ByteCopy::fromBE(mfield[0], m_bfr + 25);
           ByteCopy::fromBE(mfield[1], m_bfr + 29);
           ByteCopy::fromBE(mfield[2], m_bfr + 33);
