@@ -25,22 +25,32 @@
 // Author: Ricardo Martins                                                  *
 //***************************************************************************
 
-#ifndef DUNE_COMPRESSION_METHODS_HPP_INCLUDED_
-#define DUNE_COMPRESSION_METHODS_HPP_INCLUDED_
+// DUNE headers.
+#include <DUNE/Compression/Exceptions.hpp>
+#include <DUNE/Compression/LZ4Compressor.hpp>
+
+// LZ4 headers.
+#include <lz4/lz4.h>
 
 namespace DUNE
 {
   namespace Compression
   {
-    enum Methods
+    unsigned long
+    LZ4Compressor::compressBlock(char* dst, unsigned long dst_len, char* src, unsigned long src_len)
     {
-      METHOD_ZLIB,
-      METHOD_GZIP,
-      METHOD_BZIP2,
-      METHOD_LZ4,
-      METHOD_UNKNOWN
-    };
+      int rv = LZ4_compress(src, dst, src_len);
+
+      if (rv == 0)
+        throw OutOfMemory();
+
+      return rv;
+    }
+
+    unsigned long
+    LZ4Compressor::compressBound(unsigned long length) const
+    {
+      return LZ4_compressBound(length);
+    }
   }
 }
-
-#endif

@@ -25,20 +25,30 @@
 // Author: Ricardo Martins                                                  *
 //***************************************************************************
 
-#ifndef DUNE_COMPRESSION_METHODS_HPP_INCLUDED_
-#define DUNE_COMPRESSION_METHODS_HPP_INCLUDED_
+#ifndef DUNE_COMPRESSION_LZ4_DECOMPRESSOR_HPP_INCLUDED_
+#define DUNE_COMPRESSION_LZ4_DECOMPRESSOR_HPP_INCLUDED_
+
+// DUNE headers.
+#include <DUNE/Compression/Decompressor.hpp>
 
 namespace DUNE
 {
   namespace Compression
   {
-    enum Methods
+    // Export DLL Symbol.
+    class DUNE_DLL_SYM LZ4Decompressor;
+
+    class LZ4Decompressor: public Decompressor
     {
-      METHOD_ZLIB,
-      METHOD_GZIP,
-      METHOD_BZIP2,
-      METHOD_LZ4,
-      METHOD_UNKNOWN
+    public:
+      LZ4Decompressor(bool gzip = false);
+
+      virtual
+      ~LZ4Decompressor(void);
+
+    protected:
+      virtual unsigned long
+      decompressBlock(char* dst, unsigned long dst_len, char* src, unsigned long src_len, unsigned long& unprocessed_len);
     };
   }
 }

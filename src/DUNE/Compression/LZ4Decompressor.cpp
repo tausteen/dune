@@ -25,22 +25,35 @@
 // Author: Ricardo Martins                                                  *
 //***************************************************************************
 
-#ifndef DUNE_COMPRESSION_METHODS_HPP_INCLUDED_
-#define DUNE_COMPRESSION_METHODS_HPP_INCLUDED_
+// DUNE headers.
+#include <DUNE/Utils/String.hpp>
+#include <DUNE/Compression/Exceptions.hpp>
+#include <DUNE/Compression/LZ4Decompressor.hpp>
+
+// LZ4 headers.
+#include <lz4/lz4.h>
 
 namespace DUNE
 {
   namespace Compression
   {
-    enum Methods
+    struct LZ4Decompressor::PrivateData
     {
-      METHOD_ZLIB,
-      METHOD_GZIP,
-      METHOD_BZIP2,
-      METHOD_LZ4,
-      METHOD_UNKNOWN
+      z_stream stream;
     };
+
+    LZ4Decompressor::LZ4Decompressor(bool gzip)
+    {
+    }
+
+    LZ4Decompressor::~LZ4Decompressor(void)
+    {
+    }
+
+    unsigned long
+    LZ4Decompressor::decompressBlock(char* dst, unsigned long dst_len, char* src, unsigned long src_len, unsigned long& unprocessed_len)
+    {
+      return 0;
+    }
   }
 }
-
-#endif

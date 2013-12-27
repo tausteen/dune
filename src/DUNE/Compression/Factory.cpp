@@ -36,6 +36,8 @@
 #include <DUNE/Compression/Bzip2Compressor.hpp>
 #include <DUNE/Compression/ZlibDecompressor.hpp>
 #include <DUNE/Compression/Bzip2Decompressor.hpp>
+#include <DUNE/Compression/LZ4Compressor.hpp>
+#include <DUNE/Compression/LZ4Decompressor.hpp>
 #include <DUNE/Compression/Factory.hpp>
 
 namespace DUNE
@@ -54,6 +56,9 @@ namespace DUNE
       if (name == "bzip2")
         return METHOD_BZIP2;
 
+      if (name == "lz4")
+        return METHOD_LZ4;
+
       return METHOD_UNKNOWN;
     }
 
@@ -68,6 +73,8 @@ namespace DUNE
           return "gzip";
         case METHOD_BZIP2:
           return "bzip2";
+        case METHOD_LZ4:
+          return "lz4";
         case METHOD_UNKNOWN:
           break;
       }
@@ -86,6 +93,8 @@ namespace DUNE
           return ".gz";
         case METHOD_BZIP2:
           return ".bz2";
+        case METHOD_LZ4:
+          return ".lz4";
         case METHOD_UNKNOWN:
           break;
       }
@@ -116,6 +125,9 @@ namespace DUNE
       if (std::memcmp("BZ", bfr, 2) == 0)
         return METHOD_BZIP2;
 
+      if ((std::memcmp("\x18\x4d", bfr, 2) == 0) || (std::memcmp("\x04\x22", bfr, 2) == 0))
+        return METHOD_BZIP2;
+
       return METHOD_UNKNOWN;
     }
 
@@ -130,6 +142,8 @@ namespace DUNE
           return new GzipCompressor;
         case METHOD_BZIP2:
           return new Bzip2Compressor;
+        case METHOD_LZ4:
+          return new LZ4Compressor;
         default:
           break;
       }
@@ -154,6 +168,8 @@ namespace DUNE
           return new ZlibDecompressor(true);
         case METHOD_BZIP2:
           return new Bzip2Decompressor;
+        case METHOD_LZ4:
+          return new LZ4Decompressor;
         default:
           break;
       }
